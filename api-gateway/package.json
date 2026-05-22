@@ -1,0 +1,14 @@
+{
+  "name": "api-gateway",
+  "version": "1.0.0",
+  "description": "Apollo Gateway para el ecosistema federado",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@apollo/gateway": "^2.7.2",
+    "@apollo/server": "^4.10.2",
+    "graphql": "^16.8.1"
+  }
+}

@@ -1,0 +1,150 @@
+version: '3.8'
+
+networks:
+  ecommerce-net:
+    driver: bridge
+
+services:
+  postgres-db:
+    image: postgres:15-alpine
+    container_name: postgres-db
+    ports:
+      - "127.0.0.1:55432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: postgres
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    networks:
+      - ecommerce-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres || exit 1"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+      start_period: 3s
+
+  mongo-db:
+    image: mongo:6.0
+    container_name: mongo-db
+    ports:
+      - "127.0.0.1:57017:27017"
+    command: ["--replSet", "rs0", "--bind_ip_all"]
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - ecommerce-net
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --eval 'db.runCommand({ping: 1})' --quiet || exit 1"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+      start_period: 3s
+
+  mongo-init:
+    image: mongo:6.0
+    container_name: mongo-init
+    depends_on:
+      mongo-db:
+        condition: service_healthy
+    networks:
+      - ecommerce-net
+    entrypoint: [ "bash", "-c", "sleep 3 && mongosh --host mongo-db:27017 --eval 'try { rs.initiate({_id: \"rs0\", members: [{_id: 0, host: \"mongo-db:27017\"}]}) } catch(e) { print(\"Replica set ya inicializada\") }'" ]
+
+  ms-usuarios:
+    build: ./ms-usuarios
+    container_name: ms-usuarios
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@postgres-db:5432/usuarios?schema=public
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    networks:
+      - ecommerce-net
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 4001 || exit 1"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  ms-catalogo:
+    build: ./ms-catalogo
+    container_name: ms-catalogo
+    environment:
+      - DATABASE_URL=mongodb://mongo-db:27017/catalogo?replicaSet=rs0&directConnection=true
+    depends_on:
+      mongo-db:
+        condition: service_healthy
+      mongo-init:
+        condition: service_completed_successfully
+    networks:
+      - ecommerce-net
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 4002 || exit 1"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  ms-resenas:
+    build: ./ms-resenas
+    container_name: ms-resenas
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@postgres-db:5432/resenas?schema=public
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    networks:
+      - ecommerce-net
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 4003 || exit 1"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  ms-ordenes:
+    build: ./ms-ordenes
+    container_name: ms-ordenes
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@postgres-db:5432/ordenes?schema=public
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    networks:
+      - ecommerce-net
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 4004 || exit 1"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  api-gateway:
+    build: ./api-gateway
+    container_name: api-gateway
+    ports:
+      - "4000:4000"
+    environment:
+      - USUARIOS_URL=http://ms-usuarios:4001/graphql
+      - CATALOGO_URL=http://ms-catalogo:4002/graphql
+      - RESENAS_URL=http://ms-resenas:4003/graphql
+      - ORDENES_URL=http://ms-ordenes:4004/graphql
+    depends_on:
+      ms-usuarios:
+        condition: service_healthy
+      ms-catalogo:
+        condition: service_healthy
+      ms-resenas:
+        condition: service_healthy
+      ms-ordenes:
+        condition: service_healthy
+    networks:
+      - ecommerce-net
+
+volumes:
+  postgres-data:
+  mongo-data:
