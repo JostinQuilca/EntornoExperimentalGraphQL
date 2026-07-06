@@ -1,0 +1,19 @@
+{
+  "name": "ms-resenas",
+  "version": "1.0.0",
+  "description": "Microservicio de reseñas",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@apollo/server": "^4.10.2",
+    "@apollo/subgraph": "^2.7.2",
+    "@prisma/client": "^5.18.0",
+    "graphql": "^16.8.1",
+    "graphql-tag": "^2.12.6"
+  },
+  "devDependencies": {
+    "prisma": "^5.18.0"
+  }
+}

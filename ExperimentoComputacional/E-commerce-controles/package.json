@@ -1,0 +1,15 @@
+{
+  "name": "ecosistema-ecommerce",
+  "version": "1.0.0",
+  "description": "Ecosistema de comercio electronico vulnerable para pruebas de seguridad GraphQL",
+  "main": "index.js",
+  "scripts": {
+    "install-all": "npm install && npm install --prefix api-gateway && npm install --prefix ms-usuarios && npm install --prefix ms-catalogo && npm install --prefix ms-resenas && npm install --prefix ms-ordenes",
+    "start": "concurrently \"npm run start --prefix ms-usuarios\" \"npm run start --prefix ms-catalogo\" \"npm run start --prefix ms-resenas\" \"npm run start --prefix ms-ordenes\" \"node wait-and-start-gateway.js\"",
+    "seed": "node seeder/seed.js"
+  },
+  "dependencies": {
+    "@faker-js/faker": "^8.4.1",
+    "concurrently": "^8.2.2"
+  }
+}
