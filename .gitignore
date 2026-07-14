@@ -1,0 +1,15 @@
+# ── Dependencias (se instalan solas al construir/sembrar) ──
+node_modules/
+__pycache__/
+*.pyc
+
+# ── Estado local / temporales ──
+.seeded_ok
+*.tmp
+*.log
+temp_log.txt
+.claude/
+
+# ── Sistema ──
+.DS_Store
+Thumbs.db
