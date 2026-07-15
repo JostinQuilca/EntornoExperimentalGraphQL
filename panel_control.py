@@ -331,8 +331,9 @@ def read_results(env_path, script, vus_list):
     uc_dir = os.path.dirname(script)
     out = {}
     for vus in vus_list:
-        pattern = os.path.join(env_path, "load_tests", uc_dir, "resultados", f"reporte_consolidado_*_vus{vus}.md")
-        files = glob.glob(pattern)
+        rdir = os.path.join(env_path, "load_tests", uc_dir, "resultados")
+        files = (glob.glob(os.path.join(rdir, f"reporte_consolidado_*_vus{vus}.md"))
+                 + glob.glob(os.path.join(rdir, f"reporte_consolidado_*_vus{vus}_nivel*.md")))
         if files:
             # Si hay varios, tomamos el mas reciente o el primero
             with open(files[0], encoding="utf-8", errors="replace") as f:
@@ -344,8 +345,9 @@ def read_results_full(env_path, script, vus_list):
     uc_dir = os.path.dirname(script)
     out = {}
     for vus in vus_list:
-        pattern = os.path.join(env_path, "load_tests", uc_dir, "resultados", f"reporte_consolidado_*_vus{vus}.md")
-        files = glob.glob(pattern)
+        rdir = os.path.join(env_path, "load_tests", uc_dir, "resultados")
+        files = (glob.glob(os.path.join(rdir, f"reporte_consolidado_*_vus{vus}.md"))
+                 + glob.glob(os.path.join(rdir, f"reporte_consolidado_*_vus{vus}_nivel*.md")))
         if files:
             with open(files[0], encoding="utf-8", errors="replace") as f:
                 out[vus] = parse_md_full(f.read())
@@ -1559,10 +1561,11 @@ class App(tk.Tk):
 
             self.process.wait()
 
-            # Leer resultado del disco para este VUs
+            # Leer resultado del disco para este VUs (el archivo incluye _nivelN cuando hay nivel)
             uc_dir=os.path.dirname(script)
+            level_str=f"_nivel{level}" if level else ""
             md_path=os.path.join(env_path,"load_tests",uc_dir,"resultados",
-                                 f"reporte_consolidado_{runs}runs_vus{vus}.md")
+                                 f"reporte_consolidado_{runs}runs_vus{vus}{level_str}.md")
             if os.path.isfile(md_path):
                 with open(md_path,encoding="utf-8",errors="replace") as f:
                     all_results[vus]=parse_md(f.read())
