@@ -304,7 +304,7 @@ def launch_gui():
         b.pack(fill="x", padx=16, pady=(10 if big else 5))
         botones.append(b); return b
 
-    add_btn("⚡  Preparar TODO (compu nueva)", GREEN, lambda: in_thread(lambda: run_all(log, force_seed=force.get())), big=True)
+    add_btn("⚡  Preparar TODO", GREEN, lambda: in_thread(lambda: run_all(log, force_seed=force.get())), big=True)
     tk.Frame(left, bg=BORD, height=1).pack(fill="x", padx=16, pady=8)
     add_btn("0 · Verificar prerequisitos", BG3, lambda: in_thread(lambda: check_prereqs(log)))
     add_btn("1 · Construir imágenes Docker", BG3, lambda: in_thread(lambda: build_all(log)))
@@ -332,7 +332,7 @@ def launch_gui():
     logw.pack(fill="both", expand=True)
     for tag, col in TAGS.items():
         logw.tag_config(tag, foreground=col)
-    log("Bienvenido. Si esta PC es nueva, pulsa «Preparar TODO (compu nueva)».", "hdr")
+    log("Bienvenido. Si esta PC es nueva, pulsa «Preparar TODO».", "hdr")
     log("Requiere Docker Desktop abierto, k6 en el PATH y las dependencias de requirements.txt.", "info")
 
     drain()

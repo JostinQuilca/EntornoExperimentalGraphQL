@@ -8,7 +8,14 @@
 ║  + Gráficos de Resumen Ejecutivo Transversal                               ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
-import os, re, warnings
+import os, re, warnings, sys
+# La consola de Windows (cp1252) no puede imprimir caracteres como ═ o á y hace
+# crashear el script antes de generar nada. Forzamos UTF-8 en la salida.
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt

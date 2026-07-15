@@ -1,4 +1,9 @@
-import os, re
+import os, re, sys
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
 from datetime import datetime
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment
