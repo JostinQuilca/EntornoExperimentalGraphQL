@@ -334,6 +334,9 @@ def read_results(env_path, script, vus_list):
         rdir = os.path.join(env_path, "load_tests", uc_dir, "resultados")
         files = (glob.glob(os.path.join(rdir, f"reporte_consolidado_*_vus{vus}.md"))
                  + glob.glob(os.path.join(rdir, f"reporte_consolidado_*_vus{vus}_nivel*.md")))
+        # Tomar SIEMPRE el mas reciente. Si no, se lee un reporte viejo (de corridas
+        # anteriores que siguen en la carpeta) y salen datos rancios y otro nro de replicas.
+        files.sort(key=os.path.getmtime, reverse=True)
         if files:
             # Si hay varios, tomamos el mas reciente o el primero
             with open(files[0], encoding="utf-8", errors="replace") as f:
@@ -348,6 +351,9 @@ def read_results_full(env_path, script, vus_list):
         rdir = os.path.join(env_path, "load_tests", uc_dir, "resultados")
         files = (glob.glob(os.path.join(rdir, f"reporte_consolidado_*_vus{vus}.md"))
                  + glob.glob(os.path.join(rdir, f"reporte_consolidado_*_vus{vus}_nivel*.md")))
+        # Tomar SIEMPRE el mas reciente. Si no, se lee un reporte viejo (de corridas
+        # anteriores que siguen en la carpeta) y salen datos rancios y otro nro de replicas.
+        files.sort(key=os.path.getmtime, reverse=True)
         if files:
             with open(files[0], encoding="utf-8", errors="replace") as f:
                 out[vus] = parse_md_full(f.read())
