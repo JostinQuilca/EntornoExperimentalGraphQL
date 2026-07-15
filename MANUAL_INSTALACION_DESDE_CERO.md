@@ -36,7 +36,7 @@ Tienes dos caminos. **La Opción A es la más fácil.**
    winget install -e --id Docker.DockerDesktop
    winget install -e --id Git.Git
    winget install -e --id Python.Python.3.12
-   winget install -e --id Grafana.k6
+   winget install -e --id GrafanaLabs.k6
    ```
 
 3. **Reinicia la computadora** cuando termine (Docker lo necesita).
@@ -112,7 +112,7 @@ Instala openpyxl, matplotlib, numpy y scipy (para los gráficos y la estadístic
    python preparar_entorno.py
    ```
 
-3. Se abre una ventana. Pulsa el botón grande **«⚡ Preparar TODO (compu nueva)»**.
+3. Se abre una ventana. Pulsa el botón grande **«⚡ Preparar TODO»**.
 4. Verás en el registro cómo:
    - ✔️ verifica que todo esté instalado,
    - 🔨 construye los contenedores,
