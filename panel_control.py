@@ -128,6 +128,27 @@ UC_LEVELS = {
     "UC-05": {"max": 5, "label": "Factor (Fibonacci)",  "scale": [1,2,3,5,8]},
 }
 
+# Columna del nivel en el Excel: es la variable independiente real de cada UC.
+NIVEL_LABEL = {
+    "UC-01": "Nivel",
+    "UC-02": "Profundidad",
+    "UC-03": "Ciclos recursivos",
+    "UC-04": "Numero de alias",
+    "UC-05": "Factor de expansion",
+}
+def nivel_col(uc_short, level):
+    """(etiqueta, valor) de la columna de nivel. Traduce el indice al valor real de
+    la escala (p.ej. UC-04 nivel 8 -> 34 alias; UC-02 nivel 6 -> profundidad 6)."""
+    lab = NIVEL_LABEL.get(uc_short, "Nivel")
+    val = level if level else ""
+    try:
+        sc = UC_LEVELS[uc_short]["scale"]
+        if level and 1 <= int(level) <= len(sc):
+            val = sc[int(level) - 1]
+    except Exception:
+        pass
+    return lab, val
+
 METRICS_DEF = [
     ("Peticiones Totales",         "peticiones",      "req"),
     ("Latencia Media (ms)",        "latencia",        "ms"),
@@ -496,7 +517,7 @@ def _add_statistics_sheet(wb, full_data, vus_list):
 
 
 
-def export_excel(results_by_env, atk_name, vus_list, script_path=""):
+def export_excel(results_by_env, atk_name, vus_list, script_path="", level=None):
     """
     Genera un unico Excel con tabla plana donde cada fila = 1 run.
     Ambos entornos aparecen en el mismo sheet, agrupados por VUs.
@@ -567,11 +588,13 @@ def export_excel(results_by_env, atk_name, vus_list, script_path=""):
     ws.row_dimensions[2].height = 6
 
     # ---------- Cabeceras ----------
+    _nivel_lab, _ = nivel_col(atk_name.split(":")[0].strip(), level)
     HEADERS = [
         "Caso de Uso",
         "Entorno",
         "Tratamiento",
         "Carga (VUs)",
+        _nivel_lab,
         "Replica",
         "Fecha",
         "Hora",
@@ -652,11 +675,13 @@ def export_excel(results_by_env, atk_name, vus_list, script_path=""):
                 tp_rps = round(run.get("throughput_rps", run["peticiones"] / 60.0), 3)
                 disp = run.get("disponibilidad",
                                0 if (run["peticiones"] == 0 or run["fallos"] >= 50.0) else 1)
+                _, _nivel_val = nivel_col(uc_short, level)
                 row_vals = [
                     uc_short,
                     env_name,
                     tratam,
                     vus,
+                    _nivel_val,
                     f"R{i}",
                     run["fecha"],
                     run["hora"],
@@ -1040,6 +1065,7 @@ class App(tk.Tk):
         self.last_atk   = ATK_NAMES[0]
         self.last_script= ATTACKS[ATK_NAMES[0]]["script"]
         self.last_vus   = []    # VUs realmente ejecutados
+        self.last_level = None  # nivel usado (profundidad/ciclos/alias/factor)
 
         self._build()
 
@@ -1500,6 +1526,7 @@ class App(tk.Tk):
 
     def _exec_vus(self,env_path,script,vus_list,runs,w,on_done,level=None):
         """Ejecuta prueba para cada VUs seleccionado secuencialmente."""
+        self.last_level = level   # para que el Excel muestre la columna del nivel
         run_script=os.path.join(env_path,"load_tests","run_multiple_experiments.py")
         if not os.path.isfile(run_script):
             self._log(f"  No encontrado: {run_script}","err",w)
@@ -1732,17 +1759,17 @@ class App(tk.Tk):
 
     def _excel_simple(self):
         if not self.s_results: messagebox.showinfo("Sin datos","Ejecuta primero."); return
-        export_excel(self.s_results, self.last_atk, self.last_vus, script_path=self.last_script)
+        export_excel(self.s_results, self.last_atk, self.last_vus, script_path=self.last_script, level=self.last_level)
 
     def _excel_comparative(self):
         data={k:v for k,v in self.c_results.items() if v}
         if not data: messagebox.showinfo("Sin datos","Ejecuta el comparativo primero."); return
-        export_excel(data, self.last_atk, self.last_vus, script_path=self.last_script)
+        export_excel(data, self.last_atk, self.last_vus, script_path=self.last_script, level=self.last_level)
 
     def _excel_single(self,env_name):
         d=self.c_results.get(env_name,{})
         if not d: messagebox.showinfo("Sin datos",f"No hay datos para {env_name}."); return
-        export_excel({env_name:d}, self.last_atk, self.last_vus, script_path=self.last_script)
+        export_excel({env_name:d}, self.last_atk, self.last_vus, script_path=self.last_script, level=self.last_level)
 
 # ───────────────────────────────────────────────────────────────────────
 # ENTRY POINT
