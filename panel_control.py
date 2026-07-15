@@ -1470,6 +1470,26 @@ class App(tk.Tk):
     # ─────────────────────────────────────────────────────────
     # CORE EXEC
     # ─────────────────────────────────────────────────────────
+    def _wait_gateway(self, timeout=80):
+        """Espera hasta que el gateway federado responda (cualquier respuesta = vivo).
+        Evita las filas en 0 por arrancar k6 antes de que el supergrafo este listo."""
+        import urllib.request, urllib.error, json
+        payload = json.dumps({"query": "{ __typename }"}).encode()
+        start = time.time()
+        while time.time() - start < timeout:
+            if not self.running:
+                return False
+            try:
+                req = urllib.request.Request("http://localhost:4000/graphql",
+                    data=payload, headers={"Content-Type": "application/json"})
+                urllib.request.urlopen(req, timeout=5)
+                return True
+            except urllib.error.HTTPError:
+                return True   # respondio (aunque sea 4xx) = gateway vivo
+            except Exception:
+                time.sleep(2)  # aun no responde; reintenta
+        return False
+
     def _exec_vus(self,env_path,script,vus_list,runs,w,on_done,level=None):
         """Ejecuta prueba para cada VUs seleccionado secuencialmente."""
         run_script=os.path.join(env_path,"load_tests","run_multiple_experiments.py")
@@ -1488,7 +1508,11 @@ class App(tk.Tk):
             # Restart rapido entre VUs
             subprocess.run(["docker-compose","restart"],cwd=env_path,
                            capture_output=True,timeout=60,shell=True)
-            time.sleep(10)
+            # Esperar a que el gateway RESPONDA antes de lanzar k6.
+            # (Si arranca antes de que recomponga el supergrafo, k6 recibe 0 y da filas en 0.)
+            self._log("  Esperando a que el gateway responda...","info",w)
+            if not self._wait_gateway():
+                self._log("  [!] El gateway tardo en responder; el resultado podria salir en 0.","warn",w)
 
             cmd=[sys.executable,run_script,
                  "--test-script",script,"--vus",str(vus),"--runs",str(runs)]
