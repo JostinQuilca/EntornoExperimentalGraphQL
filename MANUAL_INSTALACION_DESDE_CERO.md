@@ -18,102 +18,102 @@
 > ⚠️ **Con menos de 8 GB de RAM el experimento NO va a correr** (los contenedores no caben y el
 > sembrado de datos falla). Si la PC tiene 8 GB, cierra los demás programas mientras corre.
 
-Vas a instalar **4 programas** (una sola vez) y luego correr el experimento. Calcula
-**1 hora** la primera vez (la mayor parte es esperar descargas y el sembrado de datos).
+Calcula **1 hora** la primera vez. Casi todo es esperar descargas y el sembrado de datos.
 
 ---
 
-## PARTE 1 — Instalar los 4 programas
+## PARTE 1 — Descargar el proyecto
 
-Tienes dos caminos. **La Opción A es la más fácil.**
+No necesitas tener nada instalado para este paso.
 
-### 🟢 Opción A — Automática (con `winget`, ya viene en Windows 11)
+1. Entra a
+   <https://github.com/JostinQuilca/EntornoExperimentalGraphQL/tree/experimento-computacional>
+2. Pulsa el botón verde **«Code» → «Download ZIP»**.
+3. **Descomprime** el ZIP donde quieras (por ejemplo, el Escritorio).
+4. Entra a la carpeta descomprimida.
 
-1. Pulsa el botón **Inicio**, escribe `PowerShell`, haz **clic derecho → «Ejecutar como administrador»**.
-2. Copia y pega estos comandos, uno por uno (Enter después de cada uno):
-
-   ```powershell
-   winget install -e --id Docker.DockerDesktop
-   winget install -e --id Git.Git
-   winget install -e --id Python.Python.3.12
-   winget install -e --id GrafanaLabs.k6
-   ```
-
-3. **Reinicia la computadora** cuando termine (Docker lo necesita).
-
-Si algún comando falla, instala ese programa con la **Opción B**.
-
-### 🔵 Opción B — Manual (descargando cada uno)
-
-1. **Docker Desktop** → <https://www.docker.com/products/docker-desktop/>
-   Descarga, instala, **reinicia**. Al abrirlo puede pedir instalar **WSL2**: acepta.
-2. **Git** → <https://git-scm.com/download/win>
-   Instala con todas las opciones por defecto (solo dale «Next»).
-3. **Python 3.12** → <https://www.python.org/downloads/>
-   Descarga e instala, pero **MUY IMPORTANTE**: en la primera pantalla marca la casilla
-   ☑️ **«Add python.exe to PATH»** antes de darle «Install Now».
-4. **k6** → <https://grafana.com/docs/k6/latest/set-up/install-k6/>
-   En la sección de Windows, descarga el instalador `.msi` y ejecútalo.
+> 💡 **¿Ya tienes Git?** Entonces es más rápido así:
+> ```powershell
+> cd $HOME\Desktop
+> git clone -b experimento-computacional https://github.com/JostinQuilca/EntornoExperimentalGraphQL.git
+> cd EntornoExperimentalGraphQL
+> ```
 
 ---
 
-## PARTE 2 — Configurar Docker Desktop
+## PARTE 2 — Instalar todo (un solo doble clic)
 
-1. Abre **Docker Desktop** (búscalo en Inicio).
-2. Espera a que abajo a la izquierda aparezca la **ballena en verde** («Engine running»).
-   La primera vez puede tardar unos minutos.
-3. Ve a **⚙️ Settings → Resources → Advanced** y sube **Memory (RAM)** a **6 GB** como mínimo
-   (8 GB si tu PC tiene 16). Dale **«Apply & restart»**.
+Dentro de la carpeta del proyecto vas a ver el archivo **`INSTALAR.bat`**.
+
+1. **Doble clic** en `INSTALAR.bat`.
+2. Windows pedirá permiso de **Administrador** → dale **«Sí»** (Docker lo exige).
+3. Espera. El script solo:
+   - 🔍 revisa qué tienes ya instalado y qué falta,
+   - 📥 instala lo que falte: **Git**, **Python 3.12**, **k6** y **Docker Desktop**,
+   - 📚 instala las librerías de Python (openpyxl, matplotlib, numpy, scipy),
+   - 🐳 enciende el motor de Docker y espera a que esté listo.
+
+> 🔁 **Si instaló Docker Desktop, te pedirá reiniciar la computadora.** Reinicia, abre Docker
+> Desktop, espera la ballena verde y **vuelve a dar doble clic en `INSTALAR.bat`**.
+> El script continúa donde quedó: no repite lo que ya instaló.
+
+Al final te muestra un resumen con las versiones y te ofrece abrir el preparador del entorno.
+
+> 🔍 **¿Solo quieres ver qué te falta, sin instalar nada?** En PowerShell:
+> ```powershell
+> powershell -ExecutionPolicy Bypass -File .\instalar_requisitos.ps1 -SoloVerificar
+> ```
+
+### 🔵 Plan B — Instalar a mano (si el script falla)
+
+<details>
+<summary>Desplegar los pasos manuales</summary>
+
+En **PowerShell como administrador**:
+
+```powershell
+winget install -e --id Git.Git
+winget install -e --id Python.Python.3.12
+winget install -e --id GrafanaLabs.k6
+winget install -e --id Docker.DockerDesktop
+```
+
+⚠️ Después de cada instalación, **cierra y vuelve a abrir PowerShell**. Si no, la ventana
+sigue sin reconocer el comando nuevo y parece que falló. (El script hace esto solo.)
+
+O descargando cada instalador:
+
+1. **Docker Desktop** → <https://www.docker.com/products/docker-desktop/> · instala y **reinicia**. Si pide **WSL2**, acepta.
+2. **Git** → <https://git-scm.com/download/win> · todo por defecto («Next» hasta el final).
+3. **Python 3.12** → <https://www.python.org/downloads/> · **MUY IMPORTANTE**: marca ☑️ **«Add python.exe to PATH»** antes de «Install Now».
+4. **k6** → <https://grafana.com/docs/k6/latest/set-up/install-k6/> · descarga el `.msi` de Windows.
+
+Y luego, en la carpeta del proyecto: `pip install -r requirements.txt`
+
+</details>
+
+---
+
+## PARTE 3 — Darle RAM a Docker
+
+1. Abre **Docker Desktop** y espera la **ballena verde** abajo a la izquierda («Engine running»).
+2. Ve a **⚙️ Settings → Resources → Advanced**.
+3. Sube **Memory (RAM)** a **6 GB** mínimo (8 GB si la PC tiene 16). Dale **«Apply & restart»**.
 
 > 💡 Deja Docker Desktop **abierto** todo el tiempo que uses el experimento.
 
 ---
 
-## PARTE 3 — Descargar el proyecto
+## PARTE 4 — Preparar el entorno (¡lo hace todo solo!)
 
-1. Abre **PowerShell** (normal, no hace falta administrador).
-2. Ubícate donde quieras guardar el proyecto, por ejemplo el escritorio:
-
-   ```powershell
-   cd $HOME\Desktop
-   ```
-
-3. Descarga el proyecto desde GitHub:
-
-   ```powershell
-   git clone -b experimento-computacional https://github.com/JostinQuilca/EntornoExperimentalGraphQL.git
-   cd EntornoExperimentalGraphQL
-   ```
-
-> **¿No quieres usar Git?** Entra a
-> <https://github.com/JostinQuilca/EntornoExperimentalGraphQL/tree/experimento-computacional>,
-> pulsa el botón verde **«Code» → «Download ZIP»**, descomprime y entra a la carpeta.
-
----
-
-## PARTE 4 — Instalar las librerías de Python
-
-Dentro de la carpeta del proyecto (en PowerShell), ejecuta:
+Si dijiste que sí al final del `INSTALAR.bat`, esta ventana ya está abierta. Si no:
 
 ```powershell
-pip install -r requirements.txt
+python preparar_entorno.py
 ```
 
-Instala openpyxl, matplotlib, numpy y scipy (para los gráficos y la estadística).
-
----
-
-## PARTE 5 — Preparar el entorno (¡lo hace todo solo!)
-
-1. Verifica que **Docker Desktop esté abierto y en verde**.
-2. En PowerShell, dentro de la carpeta del proyecto, ejecuta:
-
-   ```powershell
-   python preparar_entorno.py
-   ```
-
-3. Se abre una ventana. Pulsa el botón grande **«⚡ Preparar TODO»**.
-4. Verás en el registro cómo:
+1. Pulsa el botón grande **«⚡ Preparar TODO»**.
+2. Verás en el registro cómo:
    - ✔️ verifica que todo esté instalado,
    - 🔨 construye los contenedores,
    - 🌱 siembra ~227 000 registros de prueba,
@@ -126,7 +126,7 @@ Cuando diga **«¡LISTO!»**, ya está todo preparado.
 
 ---
 
-## PARTE 6 — Correr los ataques
+## PARTE 5 — Correr los ataques
 
 1. En la misma ventana, pulsa **«▶ Abrir Panel de Ataques»** (o ejecuta `python panel_control.py`).
 2. En el panel:
@@ -141,22 +141,24 @@ Cuando diga **«¡LISTO!»**, ya está todo preparado.
 
 | Mensaje / síntoma | Qué hacer |
 | :--- | :--- |
-| **«Docker no está corriendo»** | Abre Docker Desktop y espera a la ballena verde. |
-| **«k6 no está en el PATH»** | Reinstala k6 y **cierra y vuelve a abrir** PowerShell. |
+| **`INSTALAR.bat` se abre y cierra al instante** | Ejecútalo desde PowerShell para ver el error: `powershell -ExecutionPolicy Bypass -File .\instalar_requisitos.ps1` |
+| **«winget no está disponible»** | Instala «Instalador de aplicaciones» desde Microsoft Store, o usa el **Plan B** de la Parte 2. |
+| **«Docker no está corriendo»** | Abre Docker Desktop y espera la ballena verde. |
+| **«k6 no está en el PATH»** | Cierra y vuelve a abrir PowerShell. Si sigue, re-ejecuta `INSTALAR.bat`. |
 | **«python no se reconoce…»** | Reinstala Python marcando ☑️ «Add to PATH» y reabre PowerShell. |
-| **El sembrado falla o se congela** | Falta RAM. Cierra programas, sube la memoria de Docker (Parte 2) y reintenta con **«Forzar re-siembra»**. |
+| **`python` abre Microsoft Store** | Es el atajo falso de Windows. El script lo detecta e instala el Python real. |
+| **El sembrado falla o se congela** | Falta RAM. Cierra programas, sube la memoria de Docker (Parte 3) y reintenta con **«Forzar re-siembra»**. |
 | **«port 4000 is already in use»** | Algo está usando ese puerto. Cierra el otro programa (o reinicia la PC). |
-| **Error de WSL2 al abrir Docker** | Abre PowerShell como admin y ejecuta `wsl --install`, reinicia. |
+| **Error de WSL2 al abrir Docker** | Abre PowerShell como admin, ejecuta `wsl --install` y reinicia. |
 | **La ventana no abre pero no hay error** | Usa el modo consola: `python preparar_entorno.py --cli`. |
 
 ---
 
 ## ✔️ Lista de verificación rápida
 
-- [ ] Docker Desktop instalado, **abierto** y en **verde**.
-- [ ] Git, Python (con PATH) y k6 instalados.
 - [ ] Proyecto descargado y entré a la carpeta.
-- [ ] `pip install -r requirements.txt` sin errores.
+- [ ] `INSTALAR.bat` terminó con el resumen en verde (git, python, k6, docker).
+- [ ] Docker Desktop **abierto**, en **verde** y con **6 GB o más** de RAM.
 - [ ] `python preparar_entorno.py` → «⚡ Preparar TODO» → terminó en «¡LISTO!».
 - [ ] Abrí el panel y corrí un ataque de prueba (UC-01).
 
