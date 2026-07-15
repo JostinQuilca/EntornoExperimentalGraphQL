@@ -176,10 +176,19 @@ def seed_all(log, force=False):
 
 # ── Paso 3: verificar que respondan con datos ────────────────
 def _graphql(query):
+    """Devuelve (codigo_http, respuesta_json). Un 400 de GraphQL trae el error en el cuerpo,
+    así que hay que leerlo en vez de tratarlo como 'no respondió'."""
     data = json.dumps({"query": query}).encode()
     req = urllib.request.Request(GATEWAY_URL, data=data, headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=20) as r:
-        return json.loads(r.read().decode())
+    try:
+        with urllib.request.urlopen(req, timeout=25) as r:
+            return r.status, json.loads(r.read().decode())
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", "replace")
+        try:
+            return e.code, json.loads(body)
+        except Exception:
+            return e.code, {"raw": body[:200]}
 
 def verify_all(log):
     ensure_env_files(log)
@@ -195,14 +204,18 @@ def verify_all(log):
             log(f"  [X] {name} no levantó correctamente.", "err"); ok = False; continue
         time.sleep(8)
         try:
-            res = _graphql("query { listarResenas(limit: 1) { id } }")
-            if res.get("data") and res["data"].get("listarResenas") is not None:
-                log(f"  [OK] {name} responde con datos reales.", "ok")
+            # Consulta ligera y válida en ambos entornos: solo 10 categorías.
+            code, res = _graphql("query { listarCategorias { id } }")
+            items = (res.get("data") or {}).get("listarCategorias")
+            if items:
+                log(f"  [OK] {name} responde con datos reales ({len(items)} categorías).", "ok")
             elif res.get("errors"):
-                # en Protegido algunas consultas se bloquean: eso también es "vivo"
-                log(f"  [OK] {name} responde (devolvió control/errores esperados).", "ok")
+                msg = (res["errors"][0].get("message") or "")[:130]
+                log(f"  [X] {name} respondió (HTTP {code}) pero con error de GraphQL: {msg}", "err"); ok = False
+            elif items == []:
+                log(f"  [~] {name} responde pero la base está vacía. Falta sembrar (Paso 2).", "warn")
             else:
-                log(f"  [~] {name} respondió pero sin datos. ¿Sembraste? {res}", "warn")
+                log(f"  [~] {name} respondió HTTP {code} sin datos: {str(res)[:120]}", "warn")
         except Exception as e:
             log(f"  [X] {name} no respondió en {GATEWAY_URL}: {e}", "err"); ok = False
         subprocess.run(c + ["down", "--remove-orphans"], cwd=path, capture_output=True,
