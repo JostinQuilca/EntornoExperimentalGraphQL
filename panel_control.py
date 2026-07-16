@@ -732,7 +732,15 @@ def export_excel(results_by_env, atk_name, vus_list, script_path="", level=None)
             ws.column_dimensions[get_column_letter(ci)].width = w
 
     # ---------- Freeze header ----------
+    # openpyxl mueve la seleccion al panel inferior pero deja activeCell en A1,
+    # que pertenece al panel congelado. Excel resuelve esa contradiccion
+    # desplazando el panel de abajo hasta A1, y el titulo y las cabeceras salen
+    # duplicados. Hay que apuntar la seleccion a una celda del panel inferior.
     ws.freeze_panes = "A4"
+    for sel in ws.sheet_view.selection:
+        if sel.pane == "bottomLeft":
+            sel.activeCell = "A4"
+            sel.sqref      = "A4"
 
     # ---------- Agregar pestaña de Estadistica ----------
     if len(full_data.keys()) >= 2:
