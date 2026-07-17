@@ -160,6 +160,13 @@ METRICS_DEF = [
     ("CPU ms-ordenes (%)",         "cpu_ms_ordenes",  "%"),
     ("CPU Mongo (%)",              "cpu_mongo",       "%"),
     ("CPU Postgres (%)",           "cpu_pg",          "%"),
+    ("RAM api-gateway (MiB)",      "ram_gw",          "MiB"),
+    ("RAM ms-usuarios (MiB)",      "ram_ms_usuarios", "MiB"),
+    ("RAM ms-catalogo (MiB)",      "ram_ms_catalogo", "MiB"),
+    ("RAM ms-resenas (MiB)",       "ram_ms_resenas",  "MiB"),
+    ("RAM ms-ordenes (MiB)",       "ram_ms_ordenes",  "MiB"),
+    ("Throughput (req/s)",         "throughput_rps",  "req/s"),
+    ("Tasa de Bloqueo (%)",        "bloqueo_control", "%"),
 ]
 CHART_TYPES = [
     "Barras Comparativas",
@@ -299,6 +306,22 @@ def parse_md_full(md_text):
     avg["cpu_gw"] = sum(gw_vals)/len(gw_vals) if gw_vals else 0.0
     gw_mean_vals = list(cpu_mean.get("api-gateway",{}).values())
     avg["cpu_gw_mean"] = sum(gw_mean_vals)/len(gw_mean_vals) if gw_mean_vals else 0.0
+    # Promedio de CPU y RAM POR microservicio: sin esto, las metricas del panel de
+    # graficas mas alla del gateway salian en 0 (solo funcionaban las primeras).
+    def _avg_of(d, cont):
+        v = list(d.get(cont, {}).values())
+        return sum(v)/len(v) if v else 0.0
+    for _cont, _cpu_key, _ram_key in [
+        ("api-gateway",  "cpu_gw",          "ram_gw"),
+        ("ms-usuarios",  "cpu_ms_usuarios", "ram_ms_usuarios"),
+        ("ms-catalogo",  "cpu_ms_catalogo", "ram_ms_catalogo"),
+        ("ms-resenas",   "cpu_ms_resenas",  "ram_ms_resenas"),
+        ("ms-ordenes",   "cpu_ms_ordenes",  "ram_ms_ordenes"),
+        ("mongo-db",     "cpu_mongo",       "ram_mongo"),
+        ("postgres-db",  "cpu_pg",          "ram_pg"),
+    ]:
+        avg[_cpu_key] = _avg_of(cpu, _cont)
+        avg[_ram_key] = _avg_of(ram, _cont)
     max_cpu = 0.0
     for svc in ["ms-usuarios","ms-resenas","ms-ordenes","ms-catalogo","mongo-db","postgres-db"]:
         vals = list(cpu.get(svc,{}).values())
@@ -990,8 +1013,11 @@ class ResultPanel(tk.Frame):
         super().__init__(parent, bg=BG)
         self.mode = mode
 
-        self.btn_chart = _btn(self,"Ver Graficas",ACC,"#fff",on_chart)
-        self.btn_chart.pack(side=tk.LEFT,padx=(0,6))
+        # En modo simple no se muestran graficas (pedido del usuario): solo Excel.
+        self.btn_chart = None
+        if mode != "simple":
+            self.btn_chart = _btn(self,"Ver Graficas",ACC,"#fff",on_chart)
+            self.btn_chart.pack(side=tk.LEFT,padx=(0,6))
 
         self.btn_excel = _btn(self,"Exportar Excel","#1f6feb","#fff",on_excel_all)
         self.btn_excel.pack(side=tk.LEFT,padx=(0,6))
