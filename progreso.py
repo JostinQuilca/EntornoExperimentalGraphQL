@@ -35,6 +35,7 @@ def main():
 
     limite = time.time() - args.horas * 3600
     candidatos, total, por_uc = [], 0, {}
+    por_env = {"Vulnerable": [0, 0], "Protegido": [0, 0]}
 
     for uc_id, uc in DISENO.items():
         n_uc = 0
@@ -42,9 +43,10 @@ def main():
             for vus, nivel in uc["escenarios"]:
                 total += 1
                 n_uc += 1
+                por_env[env_name][1] += 1
                 md = ruta_reporte(env_name, uc, vus, nivel, args.replicas)
                 if os.path.isfile(md) and os.path.getmtime(md) > limite:
-                    candidatos.append((os.path.getmtime(md), uc_id))
+                    candidatos.append((os.path.getmtime(md), uc_id, env_name))
         por_uc[uc_id] = [0, n_uc]
 
     # Quedarse con la tanda en curso. En resultados sobreviven reportes de sesiones
@@ -59,12 +61,25 @@ def main():
             break
     candidatos = candidatos[inicio:]
 
-    marcas = [m for m, _ in candidatos]
-    for _, uc_id in candidatos:
+    marcas = [m for m, _, _ in candidatos]
+    for _, uc_id, env_name in candidatos:
         por_uc[uc_id][0] += 1
+        por_env[env_name][0] += 1
     n = len(candidatos)
     barra = "█" * int(30 * n / total) + "░" * (30 - int(30 * n / total))
     print(f"\n  [{barra}]  {n} de {total}  ({100*n/total:.0f}%)\n")
+
+    # Los entornos van uno detras de otro: primero Vulnerable entero y luego
+    # Protegido, para levantar Docker una sola vez por entorno.
+    for env_name, (h, t) in por_env.items():
+        if h == t:
+            estado = "completo"
+        elif h == 0:
+            estado = f"0/{t}  (en espera)"
+        else:
+            estado = f"{h}/{t}  <- en curso"
+        print(f"    {env_name:11s}: {estado}")
+    print()
 
     for uc_id, (h, t) in por_uc.items():
         estado = "completo" if h == t else f"{h}/{t}"
