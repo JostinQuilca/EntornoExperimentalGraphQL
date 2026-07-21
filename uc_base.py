@@ -137,7 +137,17 @@ def parse_md_report(md_path):
         if "|" in line and "**" in line:
             for c in CONTAINERS:
                 if c in line:
+                    # Conviven dos formatos de reporte. El antiguo escribe el valor
+                    # dos veces, "104.7MiB (104.70 MiB)", y por eso se lee solo el
+                    # del parentesis: un patron generico contaria diez valores para
+                    # cinco replicas. El nuevo escribe "233.10 MiB" a secas, sin
+                    # parentesis, y con ese patron devolvia cero.
                     mibs = re.findall(r'\(([\d.]+)\s*MiB\)', line)
+                    if not mibs:
+                        # Se quita antes la celda en negrita del promedio para no
+                        # confundirla con una replica mas.
+                        sin_prom = re.sub(r'\*\*[\d.]+\s*MiB\*\*.*$', '', line)
+                        mibs = re.findall(r'([\d.]+)\s*MiB', sin_prom)
                     if mibs:
                         ram[c] = {i+1: float(mibs[i]) for i in range(len(mibs))}
 
