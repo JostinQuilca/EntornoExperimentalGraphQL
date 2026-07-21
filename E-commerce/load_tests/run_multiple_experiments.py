@@ -17,6 +17,12 @@ import argparse
 from typing import Any
 
 
+# Entorno VULNERABLE: en cuanto la federacion responde se continua, que es como
+# se midieron todos los reportes ya recogidos. Ver la nota del entorno protegido,
+# donde esta espera si se agota entera.
+FEDERACION_ESPERA_COMPLETA = False
+
+
 def parse_memory(mem_str: str) -> float:
     """Convierte cadenas de memoria como '459.6MiB / 1.5GiB' a un valor en MiB."""
     try:
@@ -399,22 +405,33 @@ def main() -> None:
                     pass
             else:
                 print("  [WARN] Gateway no respondió tras 60s. Continuando de todas formas...")
-            # Verify federation is ready (introspection works)
+            # Comprueba que el supergrafo este compuesto SIN usar introspeccion.
+            # La sonda anterior mandaba { __schema ... }: en el entorno protegido
+            # el control LNT-SEC-01 la corta con un 403, asi que fallaba siempre y
+            # nunca verifico nada. Ahora se pide un campo inexistente; el error de
+            # validacion "Cannot query field" solo puede venir de un supergrafo ya
+            # compuesto, y al no llevar __schema/__type no lo bloquea el control.
             print("  [HEALTHCHECK-FEDERATION] Verificando federación de subgrafos...")
+            fed_lista_en = None
             for _attempt in range(15):  # max 30s
                 time.sleep(2)
+                if fed_lista_en is not None:
+                    continue  # ya verificada; se agota la ventana sin volver a sondear
                 try:
                     req = urllib.request.Request("http://localhost:4000/graphql",
-                        data=b'{"query":"{ __schema { queryType { name } } }"}',
+                        data=b'{"query":"{ sondaFederacionCampoInexistente }"}',
                         headers={"Content-Type": "application/json"}, method="POST")
-                    resp = urllib.request.urlopen(req, timeout=5)
-                    body = resp.read().decode()
-                    if "__schema" in body and "errors" not in body:
-                        print(f"  [OK] Federación lista tras {(_attempt+1)*2}s extra")
-                        break
+                    body = urllib.request.urlopen(req, timeout=5).read().decode()
+                except urllib.error.HTTPError as e:
+                    body = e.read().decode("utf-8", errors="replace")
                 except Exception:
-                    pass
-            else:
+                    body = ""
+                if "Cannot query field" in body:
+                    fed_lista_en = (_attempt + 1) * 2
+                    print(f"  [OK] Federación lista tras {fed_lista_en}s extra")
+                    if not FEDERACION_ESPERA_COMPLETA:
+                        break
+            if fed_lista_en is None:
                 print("  [WARN] Federación no verificada tras 30s extra.")
             time.sleep(8)  # Margen extra de estabilización
 
