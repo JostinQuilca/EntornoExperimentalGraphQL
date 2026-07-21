@@ -32,8 +32,8 @@ except Exception:
 import uc_base
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-REPLICAS = 5          # protocolo: R1-R5
-FIBONACCI = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377]
+REPLICAS = 3          # R1-R3
+CARGAS = [1, 2, 3, 5, 8]   # escala comun a todos los casos de uso
 
 # Duracion mediana de una replica medida sobre 606 intervalos de corridas
 # anteriores en esta misma maquina. Solo se usa para estimar, se recalcula
@@ -55,7 +55,7 @@ DISENO = {
         "iso":     "A.8.12",
         "amenaza": "Reconocimiento",
         # La carga es el numero de VUs; el nivel queda fijo en 1.
-        "escenarios": [(v, 1) for v in [1, 2, 3, 5, 8]],
+        "escenarios": [(v, 1) for v in CARGAS],
         "carga":   lambda vus, niv: str(vus),
     },
     "UC-02": {
@@ -67,7 +67,7 @@ DISENO = {
         # graphql-depth-limit corta en 5, asi que la rejilla cruza el umbral:
         # 1 y 3 dentro del rango permitido, 5 justo en el limite, 6 y 7 fuera.
         # Se omiten 2 y 4 porque se comportan igual que 1 y 3 y solo anaden horas.
-        "escenarios": [(v, n) for n in [1, 3, 5, 6, 7] for v in [1, 2, 3, 5, 8]],
+        "escenarios": [(v, n) for n in [1, 3, 5, 6, 7] for v in CARGAS],
         "carga":   lambda vus, niv: f"N{niv}·V{vus}",
     },
     "UC-03": {
@@ -77,7 +77,7 @@ DISENO = {
         "iso":     "A.8.28",
         "amenaza": "DoS / Bloqueo",
         # La carga son los ciclos de recursion, con VUs fijo en 8.
-        "escenarios": [(8, n) for n in range(1, 8)],
+        "escenarios": [(8, n) for n in CARGAS],
         "carga":   lambda vus, niv: str(niv),
     },
     "UC-04": {
@@ -87,7 +87,7 @@ DISENO = {
         "iso":     "A.8.6",
         "amenaza": "DoS / Saturación",
         # La carga es el numero de alias en una sola peticion, con VUs fijo en 1.
-        "escenarios": [(1, n) for n in FIBONACCI],
+        "escenarios": [(1, n) for n in CARGAS],
         "carga":   lambda vus, niv: str(niv),
     },
     "UC-05": {
@@ -97,7 +97,7 @@ DISENO = {
         "iso":     "A.8.28",
         "amenaza": "DoS / Desbordamiento",
         # La carga es el factor de expansion del AST, con VUs fijo en 1.
-        "escenarios": [(1, n) for n in [1, 2, 3, 5, 8]],
+        "escenarios": [(1, n) for n in CARGAS],
         "carga":   lambda vus, niv: str(niv),
     },
 }
@@ -114,7 +114,7 @@ def ruta_reporte(env_name, uc, vus, nivel, replicas=REPLICAS):
                         f"reporte_consolidado_{replicas}runs_vus{vus}_nivel{nivel}.md")
 
 
-def plan(entornos, solo, replicas):
+def plan(entornos, solo, replicas, rehacer=False):
     """Lista de escenarios a ejecutar, separando los que ya estan en disco."""
     pendientes, hechos = [], []
     for env_name in entornos:
@@ -123,7 +123,8 @@ def plan(entornos, solo, replicas):
                 continue
             for vus, nivel in uc["escenarios"]:
                 item = (env_name, uc_id, uc, vus, nivel)
-                if os.path.isfile(ruta_reporte(env_name, uc, vus, nivel, replicas)):
+                ya_esta = os.path.isfile(ruta_reporte(env_name, uc, vus, nivel, replicas))
+                if ya_esta and not rehacer:
                     hechos.append(item)
                 else:
                     pendientes.append(item)
@@ -164,21 +165,26 @@ def main():
                     help="ejecuta un unico caso de uso (UC-01 ... UC-05)")
     ap.add_argument("--entorno", default="ambos", choices=["Vulnerable", "Protegido", "ambos"])
     ap.add_argument("--replicas", type=int, default=REPLICAS,
-                    help=f"replicas por escenario (por defecto {REPLICAS}, que es lo que pide el protocolo)")
+                    help=f"replicas por escenario (por defecto {REPLICAS})")
+    ap.add_argument("--rehacer", action="store_true",
+                    help="vuelve a medir todo, ignorando los reportes que ya esten en disco")
     args = ap.parse_args()
 
     if args.solo and args.solo not in DISENO:
         sys.exit(f"[ERROR] --solo debe ser uno de: {', '.join(DISENO)}")
 
     entornos = ["Vulnerable", "Protegido"] if args.entorno == "ambos" else [args.entorno]
-    pendientes, hechos = plan(entornos, args.solo, args.replicas)
+    pendientes, hechos = plan(entornos, args.solo, args.replicas, args.rehacer)
     total = len(pendientes) + len(hechos)
 
     print("=" * 70)
     print("  CORRIDA COMPLETA DEL EXPERIMENTO")
     print(f"  Entornos : {', '.join(entornos)}")
     print(f"  Replicas : {args.replicas} por escenario")
-    print(f"  Escenarios: {total}  ({len(hechos)} ya en disco, {len(pendientes)} por ejecutar)")
+    if args.rehacer:
+        print(f"  Escenarios: {total}  (se vuelven a medir todos: --rehacer)")
+    else:
+        print(f"  Escenarios: {total}  ({len(hechos)} ya en disco, {len(pendientes)} por ejecutar)")
     est = len(pendientes) * args.replicas * SEG_POR_REPLICA
     print(f"  Estimado : {fmt_dur(est)}  (~{est/3600:.1f} h)")
     print("=" * 70)

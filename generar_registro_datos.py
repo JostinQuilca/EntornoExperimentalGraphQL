@@ -105,7 +105,7 @@ def recolectar(replicas):
     return filas, faltantes
 
 
-def escribir(filas, salida):
+def escribir(filas, salida, replicas):
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Registro_Datos"
@@ -116,7 +116,7 @@ def escribir(filas, salida):
     centro = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
     # Fila 1: titulo
-    ws.cell(1, 1, "REGISTRO DE DATOS CRUDOS — 5 réplicas por escenario — "
+    ws.cell(1, 1, f"REGISTRO DE DATOS CRUDOS — {replicas} réplicas por escenario — "
                   "7 variables — consumo por microservicio")
     ws.cell(1, 1).font = Font(name=fuente, size=12, bold=True, color="FFFFFF")
     ws.cell(1, 1).fill = PatternFill("solid", fgColor=azul)
@@ -204,7 +204,7 @@ def main():
     if not filas:
         sys.exit("[ERROR] No se encontro ningun reporte en disco. Ejecuta antes experimento_completo.py")
 
-    escribir(filas, salida)
+    escribir(filas, salida, args.replicas)
 
     esperadas = sum(len(uc["escenarios"]) for uc in DISENO.values()) * 2 * args.replicas
     invalidas = sum(1 for f in filas if f[-1])
