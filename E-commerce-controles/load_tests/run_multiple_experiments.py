@@ -367,8 +367,25 @@ def main() -> None:
                 print("  [WARN] docker-compose down timeout; matando docker-compose y siguiendo...")
                 subprocess.run(["taskkill", "/F", "/IM", "docker-compose.exe"], capture_output=True)
                 time.sleep(3)
+            result = None
             for _retry in range(4):
-                subprocess.run(["docker", "rm", "-f", "api-gateway", "mongo-db", "postgres-db", "ms-usuarios", "ms-ordenes", "ms-catalogo", "ms-resenas", "mongo-init"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                # Los contenedores reales llevan el prefijo de COMPOSE_PROJECT_NAME
+                # (exp-<proyecto>-api-gateway-1, ...), asi que borrarlos por su nombre
+                # pelado no encontraba ninguno: la limpieza entre reintentos era un
+                # no-op silencioso y el puerto 4000 seguia ocupado, de modo que los
+                # reintentos repetian el mismo fallo. Se piden los ids al propio
+                # compose, que ya resuelve el prefijo del proyecto.
+                # "-aq" solo existe en compose v2; en v1 se cae a "-q".
+                ids = []
+                for _ps_flags in (["-aq"], ["-q"]):
+                    ps = subprocess.run(["docker-compose", "ps"] + _ps_flags, cwd=env_dir,
+                                        capture_output=True, text=True)
+                    ids = [x for x in ps.stdout.split() if x]
+                    if ids:
+                        break
+                if ids:
+                    subprocess.run(["docker", "rm", "-f"] + ids,
+                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 time.sleep(3)
                 try:
                     result = subprocess.run(["docker-compose", "up", "-d"], cwd=env_dir, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=300)
@@ -376,6 +393,7 @@ def main() -> None:
                     print(f"  [WARN] docker-compose up timeout en intento {_retry+1}/4; matando y reintentando...")
                     subprocess.run(["taskkill", "/F", "/IM", "docker-compose.exe"], capture_output=True)
                     time.sleep(10)
+                    result = None
                     continue
                 if result.returncode == 0:
                     break
@@ -386,6 +404,12 @@ def main() -> None:
                 time.sleep(3)
             else:
                 print(f"  [ERROR] No se pudo levantar el entorno en {env_dir} despues de 4 intentos. Abortando.")
+                # El stderr se capturaba pero no se imprimia nunca, asi que el motivo
+                # real (tipicamente "port is already allocated") se perdia y el abort
+                # parecia inexplicable.
+                err = result.stderr.decode("utf-8", errors="replace").strip() if result is not None and result.stderr else ""
+                if err:
+                    print(f"  [ERROR] Ultimo fallo de docker-compose up:\n{err}")
                 sys.exit(1)
             time.sleep(5)
             print("  [HEALTHCHECK] Verificando que el gateway responda antes de continuar...")
