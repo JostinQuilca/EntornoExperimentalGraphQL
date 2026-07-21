@@ -5,6 +5,9 @@ __pycache__/
 
 # ── Estado local / temporales ──
 .seeded_ok
+.correr_todo.lock
+.campania_estado.json
+.campania_completada.json
 *.tmp
 *.log
 temp_log.txt
