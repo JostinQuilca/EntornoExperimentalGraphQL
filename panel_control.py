@@ -1091,6 +1091,8 @@ class App(tk.Tk):
 
         self.running = False
         self.process = None
+        self._worker  = None   # hilo de la corrida activa
+        self._run_gen = 0      # generacion: invalida hilos de corridas anteriores
 
         # Resultados de ultima ejecucion
         # {env_name: {vus_int: metrics_dict}}
@@ -1558,7 +1560,7 @@ class App(tk.Tk):
                 time.sleep(2)  # aun no responde; reintenta
         return False
 
-    def _exec_vus(self,env_path,script,vus_list,runs,w,on_done,level=None):
+    def _exec_vus(self,env_path,script,vus_list,runs,w,on_done,level=None,gen=None):
         """Ejecuta prueba para cada VUs seleccionado secuencialmente."""
         self.last_level = level   # para que el Excel muestre la columna del nivel
         run_script=os.path.join(env_path,"load_tests","run_multiple_experiments.py")
@@ -1568,7 +1570,10 @@ class App(tk.Tk):
 
         all_results={}
         for vus in vus_list:
-            if not self.running: break
+            # Un hilo de una corrida anterior debe morir aqui aunque self.running
+            # haya vuelto a True por una corrida nueva (si no, quedan 2 orquestadores
+            # peleando por el puerto 4000 y los resultados salen contaminados).
+            if not self.running or (gen is not None and gen!=self._run_gen): break
             self._log_sep(w)
             level_info = f" | Nivel={level}" if level else ""
             self._log(f"  Ejecutando VUs={vus} | Runs={runs}{level_info}","hdr",w)
@@ -1646,13 +1651,16 @@ class App(tk.Tk):
             else:
                 self._log(f"  Reporte VUs={vus} no encontrado en disco.","warn",w)
 
-        on_done(True,all_results)
+        # Un hilo obsoleto no debe tocar el estado de la corrida vigente.
+        if gen is None or gen==self._run_gen:
+            on_done(True,all_results)
 
     # ─────────────────────────────────────────────────────────
     # EJECUCION SIMPLE
     # ─────────────────────────────────────────────────────────
     def _run_simple(self):
-        if self.running: messagebox.showwarning("En ejecucion","Ya hay una prueba activa."); return
+        if self.running or (self._worker and self._worker.is_alive()):
+            messagebox.showwarning("En ejecucion","Ya hay una prueba activa."); return
         atk_name=self.s_atk.get()
         if atk_name not in ATTACKS: messagebox.showwarning("Seleccion","Selecciona un ataque."); return
         vus_list=self._s_vus_holder[0].get()
@@ -1667,6 +1675,7 @@ class App(tk.Tk):
         self.s_results={}
 
         self.running=True
+        self._run_gen += 1; gen=self._run_gen
         self.after(0,lambda:self.s_btn_run.config(state=tk.DISABLED,bg="#444"))
         self.after(0,lambda:self.s_btn_stop.config(state=tk.NORMAL,bg=RED))
         self.s_rp.disable_all()
@@ -1683,8 +1692,8 @@ class App(tk.Tk):
             def on_done(success,results):
                 self.s_results={env_name:results}
                 self._finish_simple(env_name,success)
-            self._exec_vus(env_path,script,vus_list,runs,self.s_console,on_done,level=level)
-        threading.Thread(target=thread,daemon=True).start()
+            self._exec_vus(env_path,script,vus_list,runs,self.s_console,on_done,level=level,gen=gen)
+        self._worker=threading.Thread(target=thread,daemon=True); self._worker.start()
 
     def _finish_simple(self,env_name,success):
         self.running=False; self.process=None
@@ -1699,7 +1708,8 @@ class App(tk.Tk):
     # EJECUCION COMPARATIVA
     # ─────────────────────────────────────────────────────────
     def _run_comparative(self):
-        if self.running: messagebox.showwarning("En ejecucion","Ya hay una prueba activa."); return
+        if self.running or (self._worker and self._worker.is_alive()):
+            messagebox.showwarning("En ejecucion","Ya hay una prueba activa."); return
         atk_name=self.c_atk.get()
         if atk_name not in ATTACKS: messagebox.showwarning("Seleccion","Selecciona un ataque."); return
         vus_list=self._c_vus_holder[0].get()
@@ -1712,6 +1722,7 @@ class App(tk.Tk):
         self.c_results={"Vulnerable":{},"Protegido":{}}
 
         self.running=True
+        self._run_gen += 1; gen=self._run_gen
         self.after(0,lambda:self.c_btn_run.config(state=tk.DISABLED,bg="#444"))
         self.after(0,lambda:self.c_btn_stop.config(state=tk.NORMAL,bg=RED))
         self.c_rp.disable_all()
@@ -1733,7 +1744,7 @@ class App(tk.Tk):
                 def on_v(success,results):
                     ev["r"]=results; ev["ok"]=success
                 self._exec_vus(ENVS["Vulnerable"]["path"],script,
-                               vus_list,runs,self.v_console,on_v,level=level)
+                               vus_list,runs,self.v_console,on_v,level=level,gen=gen)
                 self.c_results["Vulnerable"]=ev.get("r",{})
                 self.after(0,lambda ok=ev.get("ok",False):self.v_status.config(
                     text="Completado" if ok else "Error",fg=GREEN if ok else RED))
@@ -1752,7 +1763,7 @@ class App(tk.Tk):
                 def on_p(success,results):
                     ep["r"]=results; ep["ok"]=success
                 self._exec_vus(ENVS["Protegido"]["path"],script,
-                               vus_list,runs,self.p_console,on_p,level=level)
+                               vus_list,runs,self.p_console,on_p,level=level,gen=gen)
                 self.c_results["Protegido"]=ep.get("r",{})
                 self.after(0,lambda ok=ep.get("ok",False):self.p_status.config(
                     text="Completado" if ok else "Error",fg=GREEN if ok else RED))
@@ -1761,7 +1772,7 @@ class App(tk.Tk):
                 self.after(0,lambda:self.p_status.config(text="Error",fg=RED))
                 self._finish_comparative(False)
 
-        threading.Thread(target=thread,daemon=True).start()
+        self._worker=threading.Thread(target=thread,daemon=True); self._worker.start()
 
     def _finish_comparative(self,success):
         self.running=False; self.process=None
