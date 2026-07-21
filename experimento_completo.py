@@ -33,7 +33,11 @@ import uc_base
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 REPLICAS = 3          # R1-R3
-CARGAS = [1, 2, 3, 5, 8]   # escala comun a todos los casos de uso
+CARGAS = [1, 2, 3, 5, 8]   # escala comun a la mayoria de casos de uso
+# UC-04 necesita llegar mas alto: el control de complejidad bloquea a partir de
+# 334 alias (complejidad 3xN > 1000) y el primer Fibonacci que lo cruza es 377.
+# Con la escala corta el bloqueo nunca aparece; con esta si.
+FIBONACCI = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377]
 
 # Duracion mediana de una replica medida sobre 606 intervalos de corridas
 # anteriores en esta misma maquina. Solo se usa para estimar, se recalcula
@@ -87,7 +91,8 @@ DISENO = {
         "iso":     "A.8.6",
         "amenaza": "DoS / Saturación",
         # La carga es el numero de alias en una sola peticion, con VUs fijo en 1.
-        "escenarios": [(1, n) for n in CARGAS],
+        # Escala Fibonacci hasta 377 para cruzar el umbral del control (334 alias).
+        "escenarios": [(1, n) for n in FIBONACCI],
         "carga":   lambda vus, niv: str(niv),
     },
     "UC-05": {
