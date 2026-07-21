@@ -239,6 +239,21 @@ def generate_report(
     lines.append(f"| **PROMEDIO** | **{avg_reqs:.1f}** | **{avg_lat:.3f} ms** | **{avg_fail:.2f}%** | **{avg_block:.2f}%** |")
     lines.append("")
 
+    # Una latencia media de 0 ms no es una medicion: quiere decir que el gateway
+    # no llego a contestar (contenedor caido, supergrafo sin componer). Entraba en
+    # el promedio como si fuera valida y sin dejar rastro. No se descarta sola
+    # -esa decision es del investigador- pero se avisa para que no pase inadvertida.
+    invalidas = [r['run'] for r in results if r['avg_lat'] == 0.0]
+    if invalidas:
+        nums = ", ".join(str(n) for n in invalidas)
+        lines.append(f"> **[AVISO] Sin respuesta del entorno en las replicas {nums} de {num_runs}.**")
+        lines.append("> Una latencia media de 0 ms significa que el gateway no contesto, no que")
+        lines.append("> respondiera muy rapido. Esas replicas SI estan incluidas en el promedio")
+        lines.append("> de arriba, asi que revisa este reporte antes de usarlo.")
+        lines.append("")
+        print(f"\n  [AVISO] Sin respuesta del entorno en las replicas {nums} de {num_runs}.")
+        print("  [AVISO] Latencia 0 ms = el gateway no contesto. Revisa el reporte antes de usarlo.")
+
     # Sección 2: Picos de CPU
     lines.append("## 2. PICOS DE CPU (%) EN CONTENEDORES")
 
