@@ -33,39 +33,39 @@ def main():
     ap.add_argument("--replicas", type=int, default=REPLICAS)
     args = ap.parse_args()
 
-    limite = time.time() - args.horas * 3600
-    candidatos, total, por_uc = [], 0, {}
+    # El AVANCE cuenta TODO lo que hay en disco de esta rejilla, sin importar en
+    # cuantas sesiones se hizo. (Antes solo contaba la ultima tanda tras un hueco,
+    # y con varios cuelgues seguidos mostraba de menos: decia "1 de 106" cuando ya
+    # habia decenas hechos en tandas anteriores.)
+    hechos, total, por_uc = [], 0, {}
     por_env = {"Vulnerable": [0, 0], "Protegido": [0, 0]}
 
     for uc_id, uc in DISENO.items():
-        n_uc = 0
+        n_uc = hechos_uc = 0
         for env_name in ("Vulnerable", "Protegido"):
             for vus, nivel in uc["escenarios"]:
                 total += 1
                 n_uc += 1
                 por_env[env_name][1] += 1
                 md = ruta_reporte(env_name, uc, vus, nivel, args.replicas)
-                if os.path.isfile(md) and os.path.getmtime(md) > limite:
-                    candidatos.append((os.path.getmtime(md), uc_id, env_name))
-        por_uc[uc_id] = [0, n_uc]
+                if os.path.isfile(md):
+                    hechos.append(os.path.getmtime(md))
+                    hechos_uc += 1
+                    por_env[env_name][0] += 1
+        por_uc[uc_id] = [hechos_uc, n_uc]
 
-    # Quedarse con la tanda en curso. En resultados sobreviven reportes de sesiones
-    # anteriores del mismo dia, y contarlos falsea tanto el avance como el ritmo:
-    # un hueco grande entre dos marcas consecutivas separa una sesion de la otra.
-    candidatos.sort()
-    corte = 1800  # media hora sin escribir nada ya no es la misma tanda
+    n = len(hechos)
+
+    # El RITMO si usa solo la tanda reciente: se toma el ultimo tramo de marcas sin
+    # huecos mayores a media hora, para que un cuelgue viejo no falsee el promedio.
+    hechos.sort()
+    corte = 1800
     inicio = 0
-    for i in range(len(candidatos) - 1, 0, -1):
-        if candidatos[i][0] - candidatos[i - 1][0] > corte:
+    for i in range(len(hechos) - 1, 0, -1):
+        if hechos[i] - hechos[i - 1] > corte:
             inicio = i
             break
-    candidatos = candidatos[inicio:]
-
-    marcas = [m for m, _, _ in candidatos]
-    for _, uc_id, env_name in candidatos:
-        por_uc[uc_id][0] += 1
-        por_env[env_name][0] += 1
-    n = len(candidatos)
+    marcas = hechos[inicio:]
     barra = "█" * int(30 * n / total) + "░" * (30 - int(30 * n / total))
     print(f"\n  [{barra}]  {n} de {total}  ({100*n/total:.0f}%)\n")
 
