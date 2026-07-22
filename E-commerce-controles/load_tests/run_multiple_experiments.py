@@ -372,60 +372,74 @@ def main() -> None:
         res = run_single_experiment(i, test_script, args.vus, base_dir)
         results.append(res)
         if i < args.runs:
-            print("\n  [RESTART] Reiniciando contenedores (full down/up) para la siguiente replica...")
             import subprocess
             import urllib.request
             env_dir = os.path.dirname(base_dir)
-            try:
-                subprocess.run(["docker-compose", "down"], cwd=env_dir, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=180)
-            except subprocess.TimeoutExpired:
-                print("  [WARN] docker-compose down timeout; matando docker-compose y siguiendo...")
-                subprocess.run(["taskkill", "/F", "/IM", "docker-compose.exe"], capture_output=True)
-                time.sleep(3)
-            result = None
-            for _retry in range(4):
-                # Los contenedores reales llevan el prefijo de COMPOSE_PROJECT_NAME
-                # (exp-<proyecto>-api-gateway-1, ...), asi que borrarlos por su nombre
-                # pelado no encontraba ninguno: la limpieza entre reintentos era un
-                # no-op silencioso y el puerto 4000 seguia ocupado, de modo que los
-                # reintentos repetian el mismo fallo. Se piden los ids al propio
-                # compose, que ya resuelve el prefijo del proyecto.
-                # "-aq" solo existe en compose v2; en v1 se cae a "-q".
-                ids = []
-                for _ps_flags in (["-aq"], ["-q"]):
-                    ps = subprocess.run(["docker-compose", "ps"] + _ps_flags, cwd=env_dir,
-                                        capture_output=True, text=True)
-                    ids = [x for x in ps.stdout.split() if x]
-                    if ids:
-                        break
-                if ids:
-                    subprocess.run(["docker", "rm", "-f"] + ids,
-                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                time.sleep(3)
+            if os.environ.get("REINICIO_LIGERO"):
+                # Reinicio LIGERO: reinicia los procesos de los contenedores sin
+                # recrearlos. Cada replica arranca con estado fresco igual, pero sin
+                # el down/up completo que satura a WSL2 hasta congelarlo (la causa de
+                # que la maquina remota se colgara cada pocos escenarios). Lo activa
+                # correr_todo poniendo REINICIO_LIGERO=1 en el entorno.
+                print("\n  [RESTART-LIGERO] docker-compose restart (suave para WSL2)...")
                 try:
-                    result = subprocess.run(["docker-compose", "up", "-d"], cwd=env_dir, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=300)
+                    subprocess.run(["docker-compose", "restart"], cwd=env_dir,
+                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=180)
                 except subprocess.TimeoutExpired:
-                    print(f"  [WARN] docker-compose up timeout en intento {_retry+1}/4; matando y reintentando...")
+                    print("  [WARN] restart timeout; continuando...")
                     subprocess.run(["taskkill", "/F", "/IM", "docker-compose.exe"], capture_output=True)
-                    time.sleep(10)
-                    result = None
-                    continue
-                if result.returncode == 0:
-                    break
-                try:
-                    subprocess.run(["docker-compose", "down", "--remove-orphans"], cwd=env_dir, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=180)
-                except subprocess.TimeoutExpired:
-                    subprocess.run(["taskkill", "/F", "/IM", "docker-compose.exe"], capture_output=True)
-                time.sleep(3)
             else:
-                print(f"  [ERROR] No se pudo levantar el entorno en {env_dir} despues de 4 intentos. Abortando.")
-                # El stderr se capturaba pero no se imprimia nunca, asi que el motivo
-                # real (tipicamente "port is already allocated") se perdia y el abort
-                # parecia inexplicable.
-                err = result.stderr.decode("utf-8", errors="replace").strip() if result is not None and result.stderr else ""
-                if err:
-                    print(f"  [ERROR] Ultimo fallo de docker-compose up:\n{err}")
-                sys.exit(1)
+                print("\n  [RESTART] Reiniciando contenedores (full down/up) para la siguiente replica...")
+                try:
+                    subprocess.run(["docker-compose", "down"], cwd=env_dir, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=180)
+                except subprocess.TimeoutExpired:
+                    print("  [WARN] docker-compose down timeout; matando docker-compose y siguiendo...")
+                    subprocess.run(["taskkill", "/F", "/IM", "docker-compose.exe"], capture_output=True)
+                    time.sleep(3)
+                result = None
+                for _retry in range(4):
+                    # Los contenedores reales llevan el prefijo de COMPOSE_PROJECT_NAME
+                    # (exp-<proyecto>-api-gateway-1, ...), asi que borrarlos por su nombre
+                    # pelado no encontraba ninguno: la limpieza entre reintentos era un
+                    # no-op silencioso y el puerto 4000 seguia ocupado, de modo que los
+                    # reintentos repetian el mismo fallo. Se piden los ids al propio
+                    # compose, que ya resuelve el prefijo del proyecto.
+                    # "-aq" solo existe en compose v2; en v1 se cae a "-q".
+                    ids = []
+                    for _ps_flags in (["-aq"], ["-q"]):
+                        ps = subprocess.run(["docker-compose", "ps"] + _ps_flags, cwd=env_dir,
+                                            capture_output=True, text=True)
+                        ids = [x for x in ps.stdout.split() if x]
+                        if ids:
+                            break
+                    if ids:
+                        subprocess.run(["docker", "rm", "-f"] + ids,
+                                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    time.sleep(3)
+                    try:
+                        result = subprocess.run(["docker-compose", "up", "-d"], cwd=env_dir, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=300)
+                    except subprocess.TimeoutExpired:
+                        print(f"  [WARN] docker-compose up timeout en intento {_retry+1}/4; matando y reintentando...")
+                        subprocess.run(["taskkill", "/F", "/IM", "docker-compose.exe"], capture_output=True)
+                        time.sleep(10)
+                        result = None
+                        continue
+                    if result.returncode == 0:
+                        break
+                    try:
+                        subprocess.run(["docker-compose", "down", "--remove-orphans"], cwd=env_dir, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=180)
+                    except subprocess.TimeoutExpired:
+                        subprocess.run(["taskkill", "/F", "/IM", "docker-compose.exe"], capture_output=True)
+                    time.sleep(3)
+                else:
+                    print(f"  [ERROR] No se pudo levantar el entorno en {env_dir} despues de 4 intentos. Abortando.")
+                    # El stderr se capturaba pero no se imprimia nunca, asi que el motivo
+                    # real (tipicamente "port is already allocated") se perdia y el abort
+                    # parecia inexplicable.
+                    err = result.stderr.decode("utf-8", errors="replace").strip() if result is not None and result.stderr else ""
+                    if err:
+                        print(f"  [ERROR] Ultimo fallo de docker-compose up:\n{err}")
+                    sys.exit(1)
             time.sleep(5)
             print("  [HEALTHCHECK] Verificando que el gateway responda antes de continuar...")
             import urllib.error

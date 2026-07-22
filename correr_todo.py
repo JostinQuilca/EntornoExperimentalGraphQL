@@ -153,6 +153,10 @@ def correr_vigilado(cmd, replicas, cwd=BASE_DIR, prefijo="    "):
     de reintentos reanude desde el ultimo escenario guardado."""
     entorno = os.environ.copy()
     entorno["PYTHONUNBUFFERED"] = "1"
+    # Reinicio ligero entre replicas: docker-compose restart en vez del down/up
+    # completo. Es lo que evita que WSL2 se congele en maquinas donde Docker se
+    # ahoga con el churn de recrear contenedores cientos de veces.
+    entorno["REINICIO_LIGERO"] = "1"
     try:
         p = subprocess.Popen(cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                              text=True, encoding="utf-8", errors="replace", bufsize=1, env=entorno)
