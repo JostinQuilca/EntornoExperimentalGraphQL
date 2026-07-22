@@ -103,9 +103,16 @@ def soltar_candado():
 # Utilidad para lanzar comandos mostrando su salida en vivo.
 # ─────────────────────────────────────────────────────────────
 def correr(cmd, cwd=BASE_DIR, prefijo="    ", timeout=None):
+    # Sin esto, el proceso hijo bloquea su stdout al estar canalizado y su salida
+    # no aparece en pantalla hasta que se llena el buffer: la ventana se ve muda
+    # aunque por debajo este trabajando. PYTHONUNBUFFERED fuerza salida inmediata,
+    # y se propaga a los subprocesos que este hijo lance (hereda el entorno).
+    entorno = os.environ.copy()
+    entorno["PYTHONUNBUFFERED"] = "1"
     try:
         p = subprocess.Popen(cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                             text=True, encoding="utf-8", errors="replace", bufsize=1)
+                             text=True, encoding="utf-8", errors="replace", bufsize=1,
+                             env=entorno)
     except FileNotFoundError:
         log(f"No se encontro el ejecutable: {cmd[0]}", "err")
         return 127
