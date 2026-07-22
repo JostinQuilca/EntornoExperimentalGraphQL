@@ -29,6 +29,7 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from datetime import datetime
 
@@ -45,6 +46,8 @@ LOCK = os.path.join(BASE_DIR, ".correr_todo.lock")
 ESTADO = os.path.join(BASE_DIR, ".campania_estado.json")
 MAX_INTENTOS = 6          # reintentos de la corrida ante caidas de Docker
 ES_PREP_TIMEOUT = 3600    # tope para el paso de preparacion (build + seed)
+STALL_MIN = 15            # minutos sin un reporte nuevo => se considera colgada
+STALL_CHECK_SEG = 60      # cada cuanto revisa el vigilante si hubo avance
 
 import uc_base
 from experimento_completo import DISENO, REPLICAS, plan, ruta_reporte, fmt_dur
@@ -127,6 +130,73 @@ def correr(cmd, cwd=BASE_DIR, prefijo="    ", timeout=None):
     return p.returncode
 
 
+def _reporte_mas_nuevo(replicas):
+    """Marca de tiempo del reporte mas reciente de toda la rejilla."""
+    nuevo = 0.0
+    for env_name in ("Vulnerable", "Protegido"):
+        for uc in DISENO.values():
+            for vus, nivel in uc["escenarios"]:
+                r = ruta_reporte(env_name, uc, vus, nivel, replicas)
+                try:
+                    if os.path.isfile(r):
+                        nuevo = max(nuevo, os.path.getmtime(r))
+                except OSError:
+                    pass
+    return nuevo
+
+
+def correr_vigilado(cmd, replicas, cwd=BASE_DIR, prefijo="    "):
+    """Como correr(), pero con un vigilante que corta la corrida si deja de
+    escribir reportes por STALL_MIN minutos. Un cuelgue de Docker o de k6 no
+    dispara ningun timeout interno y congela todo en silencio; el vigilante lo
+    detecta por la falta de avance, mata el arbol de procesos y deja que el bucle
+    de reintentos reanude desde el ultimo escenario guardado."""
+    entorno = os.environ.copy()
+    entorno["PYTHONUNBUFFERED"] = "1"
+    try:
+        p = subprocess.Popen(cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                             text=True, encoding="utf-8", errors="replace", bufsize=1, env=entorno)
+    except FileNotFoundError:
+        log(f"No se encontro el ejecutable: {cmd[0]}", "err")
+        return 127
+
+    parar = threading.Event()
+    estado = {"colgada": False}
+
+    def vigilar():
+        base = _reporte_mas_nuevo(replicas)
+        ultimo_avance = time.time()   # se cuenta desde ahora, no desde el reporte viejo
+        while not parar.wait(STALL_CHECK_SEG):
+            actual = _reporte_mas_nuevo(replicas)
+            if actual > base:
+                base = actual
+                ultimo_avance = time.time()
+            if time.time() - ultimo_avance > STALL_MIN * 60:
+                estado["colgada"] = True
+                log(f"Sin reportes nuevos en {STALL_MIN} min: la corrida se colgo. "
+                    "Cortando para reanudar...", "warn")
+                try:
+                    if os.name == "nt":
+                        subprocess.run(["taskkill", "/F", "/T", "/PID", str(p.pid)],
+                                      capture_output=True)
+                    else:
+                        p.kill()
+                except Exception:
+                    pass
+                return
+
+    hilo = threading.Thread(target=vigilar, daemon=True)
+    hilo.start()
+    try:
+        for linea in p.stdout:
+            print(prefijo + linea.rstrip(), flush=True)
+    except Exception:
+        pass
+    p.wait()
+    parar.set()
+    return -999 if estado["colgada"] else p.returncode
+
+
 # ─────────────────────────────────────────────────────────────
 # Paso 1: git pull robusto.
 # ─────────────────────────────────────────────────────────────
@@ -186,8 +256,11 @@ def bajar_entornos():
         c = ["docker-compose"]
     for nombre, ruta in uc_base.ENVS.items():
         if os.path.isdir(ruta):
-            subprocess.run(c + ["down", "--remove-orphans"], cwd=ruta,
-                          capture_output=True, timeout=120)
+            try:
+                subprocess.run(c + ["down", "--remove-orphans"], cwd=ruta,
+                              capture_output=True, timeout=120)
+            except Exception:
+                pass  # si docker-compose se cuelga aqui, no debe tumbar la corrida
 
 
 # ─────────────────────────────────────────────────────────────
@@ -352,7 +425,9 @@ def main():
             cmd = [PY, "experimento_completo.py", "--replicas", str(args.replicas)]
             if args.solo:
                 cmd += ["--solo", args.solo]
-            rc = correr(cmd)
+            rc = correr_vigilado(cmd, args.replicas)
+            if rc == -999:
+                log("Corrida colgada cortada por el vigilante; se reanudara en el siguiente intento.", "warn")
 
             despues, _ = plan(entornos, args.solo, args.replicas)
             if len(despues) >= len(pend):
