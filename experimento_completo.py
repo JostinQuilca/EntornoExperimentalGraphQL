@@ -147,7 +147,13 @@ def ejecutar_escenario(env_name, uc, vus, nivel, replicas):
     script_rel = os.path.join(uc["dir"], uc["script"])
 
     variables = os.environ.copy()
+    # Cada script k6 lee su variable: UC-02, UC-03 y UC-05 usan LEVEL, pero
+    # UC-04 usa ALIAS_COUNT. Pasando solo LEVEL, UC-04 se quedaba con su valor
+    # por defecto (10 alias) en los 13 niveles, asi que nunca variaba la carga
+    # ni llegaba al umbral del control. Se pasan ambas con el mismo valor y cada
+    # script toma la que le corresponde.
     variables["LEVEL"] = str(nivel)
+    variables["ALIAS_COUNT"] = str(nivel)
 
     cmd = [sys.executable, runner, "--test-script", script_rel,
            "--vus", str(vus), "--runs", str(replicas)]
