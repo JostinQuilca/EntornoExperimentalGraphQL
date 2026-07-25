@@ -28,6 +28,8 @@ from experimento_completo import DISENO, REPLICAS, ruta_reporte
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--simular", action="store_true", help="muestra que haria, sin mover nada")
+    ap.add_argument("--excluir", default=None, metavar="UC-0N",
+                    help="no restaurar esta UC (util cuando ya se esta rehaciendo)")
     ap.add_argument("--replicas", type=int, default=REPLICAS)
     args = ap.parse_args()
 
@@ -37,6 +39,8 @@ def main():
 
     for env_name in ("Vulnerable", "Protegido"):
         for uc_id, uc in DISENO.items():
+            if args.excluir and uc_id == args.excluir:
+                continue
             por_uc.setdefault(uc_id, 0)
             for vus, nivel in uc["escenarios"]:
                 destino = ruta_reporte(env_name, uc, vus, nivel, args.replicas)
