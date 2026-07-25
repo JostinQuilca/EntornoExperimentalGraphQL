@@ -289,12 +289,16 @@ def es_campania_nueva():
     return not os.path.isfile(ESTADO)
 
 
-def archivar_reportes_previos(replicas):
-    """Aparta (no borra) reportes previos de esta rejilla, para partir limpio."""
+def archivar_reportes_previos(replicas, solo=None):
+    """Aparta (no borra) reportes previos de esta rejilla, para partir limpio.
+    Con solo=UC-0N aparta unicamente esa UC; asi --reiniciar --solo no toca los
+    datos buenos de los otros casos de uso."""
     movidos = 0
     sello = datetime.now().strftime("%Y%m%d_%H%M%S")
     for env_name in ("Vulnerable", "Protegido"):
         for uc_id, uc in DISENO.items():
+            if solo and uc_id != solo:
+                continue
             for vus, nivel in uc["escenarios"]:
                 p = ruta_reporte(env_name, uc, vus, nivel, replicas)
                 if os.path.isfile(p):
@@ -398,7 +402,7 @@ def main():
 
         # Campana nueva o reanudacion
         if args.reiniciar or es_campania_nueva():
-            n = archivar_reportes_previos(args.replicas)
+            n = archivar_reportes_previos(args.replicas, args.solo)
             log(f"Campana nueva: {n} reporte(s) previo(s) apartado(s) a carpetas _respaldo_*.", "paso")
             marcar_inicio(args.replicas)
         else:
